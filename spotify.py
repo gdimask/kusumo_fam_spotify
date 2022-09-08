@@ -1,0 +1,131 @@
+import spotipy
+import os
+import pandas as pd
+from dotenv import load_dotenv
+from datetime import datetime
+from spotipy.oauth2 import SpotifyOAuth
+from googleapiclient.discovery import build
+
+load_dotenv()
+
+def extract_spotify():
+    spotify_client_id = os.environ.get('SPOTIPY_CLIENT_ID')
+    spotify_client_secret = os.environ.get('SPOTIPY_CLIENT_SECRET')
+    spotify_redirect_url = os.environ.get('SPOTIPY_REDIRECT_URI')
+
+    spotipy_auth = SpotifyOAuth(
+        client_id=spotify_client_id,
+        client_secret=spotify_client_secret,
+        redirect_uri=spotify_redirect_url,
+        scope="user-read-recently-played")
+
+    spotipy_obj = spotipy.Spotify(auth_manager=spotipy_auth)
+    recently_played = spotipy_obj.current_user_recently_played(limit=50)
+
+    album_df = create_albums_dataframe(recently_played)
+    artist_df = create_artists_dataframe(recently_played)
+    track_df = create_tracks_dataframe(recently_played)
+    play_df = create_plays_dataframe(recently_played)
+
+    load_dataframe('album', album_df)
+    load_dataframe('artist', artist_df)
+    load_dataframe('track', track_df)
+    load_dataframe('play', play_df)
+
+
+def create_albums_dataframe(recently_played: dict) -> pd.DataFrame:
+    albums = []
+    album_columns = ['album_id', 'name', 'release_date', 'album_type']
+
+    for item in recently_played.get('items'):
+        album = item.get('track').get('album')
+        album_data = [album.get('id'), album.get('name'), album.get(
+            'release_date'), album.get('album_type')]
+
+        albums.append(album_data)
+
+    album_df = pd.DataFrame(albums, columns=album_columns)
+
+    return album_df
+
+
+def create_artists_dataframe(recently_played: dict) -> pd.DataFrame:
+    artists = []
+    artist_columns = ['artist_id', 'name', 'artist_type']
+
+    for item in recently_played.get('items'):
+        artist = item.get('track').get('album').get('artists')[0]
+        artist_data = [artist.get('id'), artist.get(
+            'name'), artist.get('type')]
+        artists.append(artist_data)
+
+    artist_df = pd.DataFrame(artists, columns=artist_columns)
+
+    return artist_df
+
+
+def create_tracks_dataframe(recently_played: dict) -> pd.DataFrame:
+    tracks = []
+    track_columns = ['track_id', 'name', 'popularity', 'track_type']
+
+    for item in recently_played.get('items'):
+        track = item.get('track')
+        track_data = [track.get('id'), track.get(
+            'name'), track.get('popularity'), track.get('type')]
+        tracks.append(track_data)
+
+    track_df = pd.DataFrame(tracks, columns=track_columns)
+
+    return track_df
+
+
+def create_plays_dataframe(recently_played: dict) -> pd.DataFrame:
+    plays = []
+    play_columns = ['track_id', 'album_id',
+                    'artist_id', 'played_at', 'context']
+
+    for item in recently_played.get('items'):
+        track = item.get('track')
+        artist = item.get('track').get('album').get('artists')[0]
+        album = item.get('track').get('album')
+
+        play_data = [track.get('id'), album.get('id'), artist.get(
+            'id'), item.get('played_at'), item.get('context')]
+        plays.append(play_data)
+
+    play_df = pd.DataFrame(plays, columns=play_columns)
+
+    return play_df
+
+def load_dataframe(table_type: str, df: pd.DataFrame) -> None:
+    filename = create_filename(table_type)
+    df.to_parquet(filename)
+    launch_dataflow_job(table_type, filename)
+
+def create_filename(table_type: str) -> str:
+    current_datetime = datetime.now().strftime("%Y-%m-%d")
+    return f"gs://{os.environ.get('BUCKET_NAME')}/temps/{table_type}_df_{current_datetime}.parquet"
+
+def launch_dataflow_job(table_type: str, filename: str) -> None:
+    dataflow = build('dataflow', 'v1b3')
+    job_name = f"{table_type}-flow"
+    request = dataflow.projects().locations().templates().launch(
+        projectId=os.environ.get('PROJECT_ID'),
+        gcsPath=f"gs://{os.environ.get('BUCKET_NAME')}/{table_type}_transfrom",
+        location='us-west2',
+        body={
+            "environment": {
+                "temp_location": f"gs://{os.environ.get('BUCKET_NAME')}/tmp"
+            },
+            "parameters": {
+                "input": filename
+            },
+            "jobName": job_name
+        }
+    )
+
+    request.execute()
+    print(f"{job_name} Launched!")
+
+if __name__ == '__main__':
+    extract_spotify()
