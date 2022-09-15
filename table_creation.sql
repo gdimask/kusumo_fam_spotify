@@ -19,6 +19,7 @@ CREATE TABLE core.dim_tracks(
 );
 
 CREATE TABLE core.fct_plays(
+  play_id STRING,
   track_id STRING,
   album_id STRING,
   artist_id STRING,

@@ -5,10 +5,30 @@ from dotenv import load_dotenv
 from datetime import datetime
 from spotipy.oauth2 import SpotifyOAuth
 from googleapiclient.discovery import build
+import hashlib
+# from flask import Request
+from google.cloud import firestore
+import pdb
+import logging
 
 load_dotenv()
 
-def extract_spotify():
+def extract_spotify(request):
+    logging.getLogger().setLevel(logging.INFO)
+    recently_played = get_spotify_data()
+
+    album_df = create_albums_dataframe(recently_played)
+    artist_df = create_artists_dataframe(recently_played)
+    track_df = create_tracks_dataframe(recently_played)
+    play_df = create_plays_dataframe(recently_played)
+
+    load_dataframe('album', album_df)
+    load_dataframe('artist', artist_df)
+    load_dataframe('track', track_df)
+    load_dataframe('play', play_df)
+    print('Success')
+
+def get_spotify_data() -> list:
     spotify_client_id = os.environ.get('SPOTIPY_CLIENT_ID')
     spotify_client_secret = os.environ.get('SPOTIPY_CLIENT_SECRET')
     spotify_redirect_url = os.environ.get('SPOTIPY_REDIRECT_URI')
@@ -21,17 +41,7 @@ def extract_spotify():
 
     spotipy_obj = spotipy.Spotify(auth_manager=spotipy_auth)
     recently_played = spotipy_obj.current_user_recently_played(limit=50)
-
-    album_df = create_albums_dataframe(recently_played)
-    artist_df = create_artists_dataframe(recently_played)
-    track_df = create_tracks_dataframe(recently_played)
-    play_df = create_plays_dataframe(recently_played)
-
-    load_dataframe('album', album_df)
-    load_dataframe('artist', artist_df)
-    load_dataframe('track', track_df)
-    load_dataframe('play', play_df)
-
+    return recently_played
 
 def create_albums_dataframe(recently_played: dict) -> pd.DataFrame:
     albums = []
@@ -81,16 +91,17 @@ def create_tracks_dataframe(recently_played: dict) -> pd.DataFrame:
 
 def create_plays_dataframe(recently_played: dict) -> pd.DataFrame:
     plays = []
-    play_columns = ['track_id', 'album_id',
-                    'artist_id', 'played_at', 'context']
+    play_columns = ['play_id', 'track_id', 'album_id', 'artist_id', 'played_at']
 
     for item in recently_played.get('items'):
         track = item.get('track')
         artist = item.get('track').get('album').get('artists')[0]
         album = item.get('track').get('album')
+        track_key = f"{track.get('id')}-{item.get('played_at')}"
+        play_id = hashlib.md5(track_key.encode()).hexdigest()
 
-        play_data = [track.get('id'), album.get('id'), artist.get(
-            'id'), item.get('played_at'), item.get('context')]
+        play_data = [play_id, track.get('id'), album.get('id'), artist.get(
+            'id'), item.get('played_at')]
         plays.append(play_data)
 
     play_df = pd.DataFrame(plays, columns=play_columns)
@@ -128,4 +139,4 @@ def launch_dataflow_job(table_type: str, filename: str) -> None:
     print(f"{job_name} Launched!")
 
 if __name__ == '__main__':
-    extract_spotify()
+    extract_spotify({})

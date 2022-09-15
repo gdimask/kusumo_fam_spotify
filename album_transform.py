@@ -52,7 +52,6 @@ def run():
             p
             | 'Read Existing Data' >> ReadFromBigQuery(
                 method='DIRECT_READ',
-                project='dbtbigquery-331216',
                 query=query,
                 use_standard_sql=True,
             )
@@ -85,8 +84,6 @@ def run():
             table='dim_albums',
             dataset='core',
             temp_file_format='AVRO',
-            project='dbtbigquery-331216',
-            custom_gcs_temp_location='gs://grego-spotify/beam_temp',
             schema=table_schema,
             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
             create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER
