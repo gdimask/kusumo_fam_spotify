@@ -98,8 +98,10 @@ def album_to_dict(album):
     }
 
 def reformat_release_date(release_date):
-    if re.match(r"^\d*-\d*$", release_date):
+    if re.match(r"^\d*-\d*$", release_date): # Only year-month format. Ex: 2020-01
         release_date = f"{release_date}-01"
+    elif re.match(r"^\d{4}$", release_date): # Only year format. Example: 2000
+        release_date = f"{release_date}-01-01"
 
     return release_date
 
