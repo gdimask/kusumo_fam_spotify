@@ -11,6 +11,16 @@ class Track(NamedTuple):
     name: str
     popularity: int
     track_type: str
+    danceability: float
+    energy: float
+    speechiness: float
+    acousticness: float
+    instrumentalness: float
+    liveness: float
+    valence: float
+    tempo: float
+    key: int
+    duration_ms: int
 
 class RunTimeOptions(PipelineOptions):
    @classmethod
@@ -28,7 +38,23 @@ def run():
         select *
         from core.dim_tracks
     """
-    table_schema = 'track_id:STRING,name:STRING,popularity:INTEGER,track_type:STRING'
+    table_schemas = [
+        'track_id:STRING',
+        'name:STRING',
+        'popularity:INTEGER',
+        'track_type:STRING',
+        'danceability:FLOAT',
+        'energy:FLOAT',
+        'speechiness:FLOAT',
+        'acousticness:FLOAT',
+        'instrumentalness:FLOAT',
+        'liveness:FLOAT',
+        'valence:FLOAT',
+        'tempo:FLOAT',
+        'key:INTEGER',
+        'duration_ms:INTEGER'
+    ]
+    table_schema = ','.join(table_schemas)
     with beam.Pipeline(options=pipeline_options) as p:
         new_data = p | 'ReadAlbum' >> ReadFromParquet(user_options.input)
 
@@ -78,7 +104,17 @@ def track_to_dict(track):
         'track_id': track.track_id,
         'name': track.name,
         'popularity': track.popularity,
-        'track_type': track.track_type
+        'track_type': track.track_type,
+        'danceability': track.danceability,
+        'energy': track.energy,
+        'speechiness': track.speechiness,
+        'acousticness': track.acousticness,
+        'instrumentalness': track.instrumentalness,
+        'liveness': track.liveness,
+        'valence': track.valence,
+        'tempo': track.tempo,
+        'key': track.key,
+        'duration_ms': track.duration_ms
     }
 
 if __name__ == '__main__':

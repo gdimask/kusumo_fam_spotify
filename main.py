@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from dotenv import load_dotenv
 from datetime import datetime
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyOAuth, SpotifyClientCredentials
 from googleapiclient.discovery import build
 import hashlib
 # from flask import Request
@@ -76,17 +76,35 @@ def create_artists_dataframe(recently_played: dict) -> pd.DataFrame:
 
 def create_tracks_dataframe(recently_played: dict) -> pd.DataFrame:
     tracks = []
-    track_columns = ['track_id', 'name', 'popularity', 'track_type']
+    track_columns = ['track_id', 'name', 'popularity', 'track_type', 'danceability', 'energy', 'speechiness', 'acousticness', 'instrumentalness', 'liveness', 'valence', 'tempo', 'key', 'duration_ms']
 
     for item in recently_played.get('items'):
         track = item.get('track')
+        audio_feature = get_audio_feature(track)
+        audio_feature_headers = ['danceability', 'energy', 'speechiness', 'acousticness', 'instrumentalness', 'liveness', 'valence', 'tempo', 'key', 'duration_ms']
         track_data = [track.get('id'), track.get(
-            'name'), track.get('popularity'), track.get('type')]
+            'name'), track.get('popularity'), track.get('type'),
+            ]
+        for audio_feature_header in audio_feature_headers:
+            track_data.append(audio_feature.get(audio_feature_header))
+
         tracks.append(track_data)
 
     track_df = pd.DataFrame(tracks, columns=track_columns)
 
     return track_df
+
+def get_audio_feature(track: dict):
+    spotify_client_id = os.environ.get('SPOTIPY_CLIENT_ID')
+    spotify_client_secret = os.environ.get('SPOTIPY_CLIENT_SECRET')
+    client_credentials_manager = SpotifyClientCredentials(
+        client_id=spotify_client_id,
+        client_secret=spotify_client_secret)
+
+    spotify_client = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+    response = spotify_client.audio_features([track.get('id')])[0]
+
+    return response
 
 
 def create_plays_dataframe(recently_played: dict) -> pd.DataFrame:
